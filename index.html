@@ -39,9 +39,15 @@
     .action{border:0;border-radius:13px;padding:12px 16px;font:700 13px 'DM Sans';cursor:pointer;transition:transform .15s,filter .15s}
     .action:hover{transform:translateY(-1px);filter:brightness(1.08)}
     .primary{flex:1;background:var(--cyan);color:#10201e}.secondary{background:#2a3042;color:#e7eaf3;border:1px solid #42495f}
+    .powers{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+    .power{background:#292d40;color:#f5f6fb;border:1px solid #454c65;display:flex;flex-direction:column;gap:3px;align-items:center}
+    .power span{font-size:10px;color:#aeb5c9;font-weight:600}
+    .power:disabled{opacity:.38;cursor:not-allowed;transform:none;filter:none}
+    .power.selected{border-color:var(--gold);box-shadow:0 0 0 2px #f6cf7333}
+    .power-help{text-align:center;min-height:18px;color:var(--gold);font-size:12px;margin:8px 0 0}
     .hint{text-align:center;color:#7f879d;font-size:12px;margin:13px 0 0}
     footer{text-align:center;color:#70788e;font-size:11px;margin-top:16px}
-    @media(max-width:390px){.scoreboard{gap:8px}.score{padding:9px 7px}.board{gap:4px}.cell{border-radius:5px}.actions{gap:7px}.action{padding:11px 10px}}
+    @media(max-width:390px){.powers{gap:6px}.power{padding:10px 6px}.scoreboard{gap:8px}.score{padding:9px 7px}.board{gap:4px}.cell{border-radius:5px}.actions{gap:7px}.action{padding:11px 10px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
   </style>
 </head>
@@ -60,6 +66,11 @@
       </div>
       <p class="status" id="status" aria-live="polite"><strong>👑 King</strong> — your turn</p>
       <div class="board" id="board" role="group" aria-label="6 row by 6 column game board"></div>
+      <div class="powers" aria-label="Special powers">
+        <button class="action power fire" id="firePower">🔥 Dragon Fire <span id="fireCount">1 left</span></button>
+        <button class="action power portal" id="portalPower">🌀 Magic Portal <span id="portalCount">1 left</span></button>
+      </div>
+      <p class="power-help" id="powerHelp" aria-live="polite">Each player can use each power once per round.</p>
       <div class="actions">
         <button class="action primary" id="restart">↻ &nbsp; Restart round</button>
         <button class="action secondary" id="reset">Reset scores</button>
@@ -69,99 +80,117 @@
     <footer>MADE FOR FRIENDLY COMPETITION</footer>
   </main>
   <script>
-    const SIZE = 6;
-    const TARGET = 4;
-    const boardElement = document.getElementById('board');
-    const statusElement = document.getElementById('status');
-    const scoreX = document.getElementById('pointsX');
-    const scoreO = document.getElementById('pointsO');
-    const cells = [];
-    const directions = [[0,1],[1,0],[1,1],[1,-1]];
-    let board = Array(SIZE * SIZE).fill('');
-    let turn = 'X';
-    let active = true;
-    let scores = {X:0,O:0};
-
-    for(let i=0;i<SIZE*SIZE;i++){
-      const cell=document.createElement('button');
-      cell.type='button';
-      cell.className='cell';
-      cell.dataset.index=i;
-      cell.setAttribute('aria-label','Row '+(Math.floor(i/SIZE)+1)+', column '+(i%SIZE+1)+', empty');
-      cell.addEventListener('click',()=>play(i));
-      boardElement.appendChild(cell);
-      cells.push(cell);
+    const SIZE=6,TARGET=4;
+    const boardElement=document.getElementById('board');
+    const statusElement=document.getElementById('status');
+    const scoreX=document.getElementById('pointsX'),scoreO=document.getElementById('pointsO');
+    const powerHelp=document.getElementById('powerHelp');
+    const cells=[];
+    let board=Array(SIZE*SIZE).fill(''),turn='X',active=true,scores={X:0,O:0};
+    let fireUsed={X:false,O:false},portalUsed={X:false,O:false};
+    let mode=null,portalFirst=null;
+    const symbol=p=>p==='X'?'👑':'🐉';
+    const playerName=p=>p==='X'?'King':'Dragon';
+    for(let i=0;i<36;i++){
+      const cell=document.createElement('button');cell.type='button';cell.className='cell';cell.dataset.index=i;
+      cell.setAttribute('aria-label',`Row ${Math.floor(i/6)+1}, column ${i%6+1}, empty`);
+      cell.addEventListener('click',()=>handleCell(i));boardElement.appendChild(cell);cells.push(cell);
     }
-
     function setStatus(message){statusElement.innerHTML=message;}
     function updateScores(){
-      scoreX.textContent=scores.X;
-      scoreO.textContent=scores.O;
+      scoreX.textContent=scores.X;scoreO.textContent=scores.O;
       document.getElementById('scoreX').classList.toggle('active',active&&turn==='X');
       document.getElementById('scoreO').classList.toggle('active',active&&turn==='O');
+      document.getElementById('fireCount').textContent=fireUsed[turn]?'used':'1 left';
+      document.getElementById('portalCount').textContent=portalUsed[turn]?'used':'1 left';
+      document.getElementById('firePower').disabled=!active||fireUsed[turn];
+      document.getElementById('portalPower').disabled=!active||portalUsed[turn];
     }
-    function getWinningLine(index,player){
-      const row=Math.floor(index/SIZE),col=index%SIZE;
-      for(const [dr,dc] of directions){
-        const line=[index];
-        for(const sign of [-1,1]){
-          let r=row+dr*sign,c=col+dc*sign;
-          while(r>=0&&r<SIZE&&c>=0&&c<SIZE&&board[r*SIZE+c]===player){
-            line.push(r*SIZE+c);
-            r+=dr*sign;c+=dc*sign;
-          }
-        }
-        if(line.length>=TARGET)return line;
-      }
-      return null;
-    }
-    function play(index){
-      if(!active||board[index])return;
-      board[index]=turn;
-      const cell=cells[index];
-      cell.textContent=turn==='X'?'👑':'🐉';
-      cell.classList.add(turn.toLowerCase());
-      cell.setAttribute('aria-label','Row '+(Math.floor(index/SIZE)+1)+', column '+(index%SIZE+1)+', '+(turn==='X'?'King 👑':'Dragon 🐉'));
-      cell.disabled=true;
-      const line=getWinningLine(index,turn);
-      if(line){
-        active=false;
-        line.forEach(i=>cells[i].classList.add('winner'));
-        scores[turn]++;
-        setStatus('<strong>'+(turn==='X'?'King 👑':'Dragon 🐉')+' wins!</strong> 🎉');
-        cells.forEach(c=>c.disabled=true);
-        updateScores();
-        return;
-      }
-      if(board.every(Boolean)){
-        active=false;
-        setStatus("It's a draw! 🤝");
-        updateScores();
-        return;
-      }
-      turn=turn==='X'?'O':'X';
-      setStatus('<strong class="'+(turn==='O'?'o':'')+'">'+(turn==='X'?'King 👑':'Dragon 🐉')+'</strong> — your turn');
-      updateScores();
-    }
-    function restartRound(){
-      board=Array(SIZE*SIZE).fill('');
-      turn='X';
-      active=true;
+    function render(){
       cells.forEach((cell,i)=>{
-        cell.textContent='';
-        cell.disabled=false;
-        cell.className='cell';
-        cell.setAttribute('aria-label','Row '+(Math.floor(i/SIZE)+1)+', column '+(i%SIZE+1)+', empty');
+        const p=board[i];cell.textContent=p?symbol(p):'';
+        cell.className='cell'+(p?' '+p.toLowerCase():'');
+        cell.disabled=!active||!!p;
+        cell.setAttribute('aria-label',`Row ${Math.floor(i/6)+1}, column ${i%6+1}, ${p?playerName(p)+' '+symbol(p):'empty'}`);
       });
-      setStatus('<strong>👑 King</strong> — your turn');
       updateScores();
+    }
+    function findWinningLines(){
+      const lines=[];
+      for(let r=0;r<6;r++)for(let c=0;c<6;c++){
+        const p=board[r*6+c];if(!p)continue;
+        for(const [dr,dc] of [[0,1],[1,0],[1,1],[1,-1]]){
+          const rr=r+3*dr,cc=c+3*dc;
+          if(rr<0||rr>=6||cc<0||cc>=6)continue;
+          const line=[0,1,2,3].map(n=>(r+n*dr)*6+c+n*dc);
+          if(line.every(i=>board[i]===p))lines.push({player:p,line});
+        }
+      }
+      return lines;
+    }
+    function finishIfWon(){
+      const wins=findWinningLines();
+      if(!wins.length)return false;
+      active=false;mode=null;portalFirst=null;
+      const winners=[...new Set(wins.map(w=>w.player))];
+      wins.forEach(w=>w.line.forEach(i=>cells[i].classList.add('winner')));
+      if(winners.length===2){setStatus('Both kingdoms made four in a row — draw! 🤝');}
+      else{const p=winners[0];scores[p]++;setStatus('<strong>'+playerName(p)+' '+symbol(p)+' wins!</strong> 🎉');}
+      powerHelp.textContent='Round over — restart to play again.';
+      render();cells.forEach(c=>c.disabled=true);return true;
+    }
+    function passTurn(){
+      turn=turn==='X'?'O':'X';
+      setStatus('<strong class="'+(turn==='O'?'o':'')+'">'+playerName(turn)+' '+symbol(turn)+'</strong> — your turn');
+      powerHelp.textContent='Each player gets one Fire and one Portal per round.';
+      mode=null;portalFirst=null;
+      document.getElementById('firePower').classList.remove('selected');
+      document.getElementById('portalPower').classList.remove('selected');
+      render();
+    }
+    function handleCell(i){
+      if(!active)return;
+      if(mode==='fire'){
+        if(board[i]!== (turn==='X'?'O':'X')){powerHelp.textContent='Choose a cell occupied by your opponent.';return;}
+        board[i]='';fireUsed[turn]=true;powerHelp.textContent='🔥 Fire hit! Your turn is over.';
+        render();if(!finishIfWon()){if(board.every(v=>!v)){active=false;setStatus("It's a draw! 🤝");render();}else passTurn();}return;
+      }
+      if(mode==='portal'){
+        if(portalFirst===null){portalFirst=i;cells[i].classList.add('winner');powerHelp.textContent='Now choose the second cell to swap.';return;}
+        if(portalFirst===i){powerHelp.textContent='Choose a different second cell.';return;}
+        [board[portalFirst],board[i]]=[board[i],board[portalFirst]];
+        portalUsed[turn]=true;powerHelp.textContent='🌀 Portal activated!';render();
+        if(!finishIfWon())passTurn();return;
+      }
+      if(board[i])return;
+      board[i]=turn;render();
+      if(finishIfWon())return;
+      if(board.every(Boolean)){active=false;setStatus("It's a draw! 🤝");powerHelp.textContent='Round over — restart to play again.';render();return;}
+      passTurn();
+    }
+    document.getElementById('firePower').addEventListener('click',()=>{
+      if(!active||fireUsed[turn])return;
+      mode=mode==='fire'?null:'fire';portalFirst=null;
+      document.getElementById('firePower').classList.toggle('selected',mode==='fire');
+      document.getElementById('portalPower').classList.remove('selected');
+      powerHelp.textContent=mode==='fire'?'🔥 Select one opponent symbol to burn.':'Power cancelled.';
+    });
+    document.getElementById('portalPower').addEventListener('click',()=>{
+      if(!active||portalUsed[turn])return;
+      mode=mode==='portal'?null:'portal';portalFirst=null;
+      document.getElementById('portalPower').classList.toggle('selected',mode==='portal');
+      document.getElementById('firePower').classList.remove('selected');
+      powerHelp.textContent=mode==='portal'?'🌀 Select two cells to swap (empty cells count too).':'Power cancelled.';
+    });
+    function restartRound(){
+      board=Array(36).fill('');turn='X';active=true;mode=null;portalFirst=null;
+      fireUsed={X:false,O:false};portalUsed={X:false,O:false};
+      powerHelp.textContent='Each player can use each power once per round.';
+      setStatus('<strong>👑 King</strong> — your turn');render();
     }
     document.getElementById('restart').addEventListener('click',restartRound);
-    document.getElementById('reset').addEventListener('click',()=>{
-      scores={X:0,O:0};
-      restartRound();
-    });
-    updateScores();
+    document.getElementById('reset').addEventListener('click',()=>{scores={X:0,O:0};restartRound();});
+    render();
   </script>
 </body>
 </html>
