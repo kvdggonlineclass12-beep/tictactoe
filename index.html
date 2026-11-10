@@ -54,17 +54,17 @@
     </header>
     <section class="panel" aria-label="6 by 6 Tic Tac Toe game">
       <div class="scoreboard" aria-label="Score">
-        <div class="score active" id="scoreX"><div class="player">Player one</div><div class="symbol">×</div><div class="points" id="pointsX">0</div></div>
+        <div class="score active" id="scoreX"><div class="player">Player one</div><div class="symbol">👑</div><div class="points" id="pointsX">0</div></div>
         <div class="versus">VS</div>
-        <div class="score" id="scoreO"><div class="player">Player two</div><div class="symbol">○</div><div class="points" id="pointsO">0</div></div>
+        <div class="score" id="scoreO"><div class="player">Player two</div><div class="symbol">🐉</div><div class="points" id="pointsO">0</div></div>
       </div>
-      <p class="status" id="status" aria-live="polite"><strong>Player X</strong> — your turn</p>
+      <p class="status" id="status" aria-live="polite"><strong>👑 King</strong> — your turn</p>
       <div class="board" id="board" role="group" aria-label="6 row by 6 column game board"></div>
       <div class="actions">
         <button class="action primary" id="restart">↻ &nbsp; Restart round</button>
         <button class="action secondary" id="reset">Reset scores</button>
       </div>
-      <p class="hint">Take turns placing X and O. Get 4 in a row horizontally, vertically or diagonally to win.</p>
+      <p class="hint">Take turns placing 👑 and 🐉. Get 4 in a row horizontally, vertically or diagonally to win.</p>
     </section>
     <footer>MADE FOR FRIENDLY COMPETITION</footer>
   </main>
@@ -119,16 +119,16 @@
       if(!active||board[index])return;
       board[index]=turn;
       const cell=cells[index];
-      cell.textContent=turn==='X'?'×':'○';
+      cell.textContent=turn==='X'?'👑':'🐉';
       cell.classList.add(turn.toLowerCase());
-      cell.setAttribute('aria-label','Row '+(Math.floor(index/SIZE)+1)+', column '+(index%SIZE+1)+', '+turn);
+      cell.setAttribute('aria-label','Row '+(Math.floor(index/SIZE)+1)+', column '+(index%SIZE+1)+', '+(turn==='X'?'King 👑':'Dragon 🐉'));
       cell.disabled=true;
       const line=getWinningLine(index,turn);
       if(line){
         active=false;
         line.forEach(i=>cells[i].classList.add('winner'));
         scores[turn]++;
-        setStatus('<strong>Player '+turn+' wins!</strong> 🎉');
+        setStatus('<strong>'+(turn==='X'?'King 👑':'Dragon 🐉')+' wins!</strong> 🎉');
         cells.forEach(c=>c.disabled=true);
         updateScores();
         return;
@@ -140,7 +140,7 @@
         return;
       }
       turn=turn==='X'?'O':'X';
-      setStatus('<strong class="'+(turn==='O'?'o':'')+'">Player '+turn+'</strong> — your turn');
+      setStatus('<strong class="'+(turn==='O'?'o':'')+'">'+(turn==='X'?'King 👑':'Dragon 🐉')+'</strong> — your turn');
       updateScores();
     }
     function restartRound(){
@@ -153,7 +153,7 @@
         cell.className='cell';
         cell.setAttribute('aria-label','Row '+(Math.floor(i/SIZE)+1)+', column '+(i%SIZE+1)+', empty');
       });
-      setStatus('<strong>Player X</strong> — your turn');
+      setStatus('<strong>👑 King</strong> — your turn');
       updateScores();
     }
     document.getElementById('restart').addEventListener('click',restartRound);
